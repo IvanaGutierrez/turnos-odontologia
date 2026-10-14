@@ -1,0 +1,53 @@
+# Compose canónico del proyecto (C-01). Requiere Docker + Compose v2.
+# NOTA C-01/RED: en esta máquina Windows no hay Docker instalado (bloqueador
+# ambiental documentado en el reporte de apply-parte-1); el Postgres real para
+# verificación RED se proveyó con PostgreSQL 18 nativo. Este archivo es la
+# definición canónica para dev/CI/prod y NO se validó con `docker compose
+# config` en esta máquina (pendiente al instalar Docker).
+name: turnos-odontologia
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: turnos
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?definir en .env (ver .env.example)}
+      POSTGRES_DB: turnos
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U turnos"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  api:
+    build: ./backend
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://turnos:${POSTGRES_PASSWORD}@postgres:5432/turnos
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+
+  worker:
+    # C-06: drena `wa:envios` + avisos vencidos (reintentos, DLQ, fallback).
+    build: ./backend
+    env_file: .env
+    depends_on:
+      - redis
+      - postgres
+    command: python -m app.workers.envios
+
+volumes:
+  pgdata:

@@ -1,0 +1,36 @@
+# Design — C-09 `caja-cierre-diario`
+
+## Context
+
+Ver `proposal.md` (Why/What). Estado actual (solo lectura de `app/`): no existen tablas `movimiento_caja` ni `cierre_diario`, ni router `caja`; la interfaz de conciliación que dejó C-08 es el evento de auditoría `pago_acreditado` (payload `v:1` con `{pago_id, turno_id, monto, moneda:'ARS', metodo:'mercadopago', mp_payment_id}`, ver `services/pagos.py:502-518`) sobre la tabla `pago` (`estado='acreditado'`, `webhook_recibido_at`, moneda CHECK `ARS`); la matriz RBAC (`domain/auth/matriz.py`) no tiene recurso `caja` (deny-by-default: cualquier combinación no listada → `403`); `Sillon.sede` es texto con default `"Consultorio"` (entidad multi-sede diferida); `AuditoriaLog` es append-only con `sanitizar_diff()` (denylist R6). Restricciones: R0 sintético; R1 hints; R2 capas + Alembic; R5 TDD con los 3 casos del scope en verde; R6 montos/usuarios sin PII en logs y conceptos libres sanitizados; R7 secretos solo env; R8 stack fijo.
+
+## Goals / Non-Goals
+
+**Goals:**
+
+- Movimientos manuales trazables por método con operador y concepto (RN-PA-05).
+- Cierre único por día/sede que concilia declarado vs acreditado y marca diferencias (RN-PA-04, Flujo 6).
+- Día cerrado bloqueado; reapertura solo admin y siempre auditada.
+
+**Non-Goals:**
+
+- Crear o mutar pagos MP (C-08 es el único escritor de `pago`; aquí solo lectura).
+- Facturación ARCA, reembolsos, reportes CSV (C-11), entidad multi-sede real.
+
+## Decisions
+
+1. **Migración 011 `caja_cierre_diario` (CHANGES.md decía 006 — obsoleto).** Cadena verificada por `revision`/`down_revision`: `001→002→003→004→005→006→007→008→009→010_pago_comprobante (head)`; 006–010 ocupadas. La 011 crea `movimiento_caja(id, fecha DATE, sede TEXT default 'Consultorio', tipo ingreso|egreso CHECK, concepto TEXT, monto NUMERIC(12,2) CHECK >0, metodo CHECK x4, usuario_id FK, pago_id FK NULL, origen manual|mercadopago CHECK, created_at)` + `cierre_diario(id, fecha DATE, sede TEXT, total_efectivo, total_transferencia, total_tarjeta, total_mp, total_egresos, acreditado_mp, diferencia, estado abierto|cerrado CHECK, cerrado_por FK NULL, cerrado_at NULL, reaperturas INT default 0, created_at)` + `UNIQUE(fecha, sede)` en cierre + índices `(fecha, sede)` en movimientos. Alternativa descartada: reutilizar "006 libre" — no está libre; renumerar rompería el historial aplicado.
+2. **Conciliación contra la tabla `pago` (fuente primaria), evento `pago_acreditado` como trazabilidad.** El cierre calcula por (fecha, sede): `totales_por_metodo` desde `movimiento_caja` (ingresos menos egresos por método) y `acreditado_mp` desde `pago` con `estado='acreditado'` y fecha operativa del día; `diferencia = total_mp_movimientos − acreditado_mp` (+ `total_egresos` informativo; efectivo/transferencia/tarjeta no tienen fuente externa y se snapshotan tal cual). El evento `pago_acreditado` v1 NO se parsea para el cálculo (auditoría append-only, no libro contable); se usa para trazabilidad manual ante diferencias. `pago_id` opcional en el movimiento permite atar un ingreso MP manual a su pago. Alternativa descartada: conciliar solo contra eventos de auditoría — frágil ante cambios de formato y mezcla libros (C-08 design §7 ya advierte que el evento es versionado, no contable).
+3. **Unicidad día/sede en DB, no solo en servicio.** `UNIQUE(fecha, sede)` en `cierre_diario` (la DB manda ante doble cierre concurrente → `409`); un solo renglón por día/sede con máquina `abierto→cerrado` (cierre) y `cerrado→abierto` (reapertura, con `reaperturas+1`). Fecha operativa = `DATE` en zona `America/Argentina_Buenos_Aires` (nuevo setting `CAJA_TZ`, default ese; solo env — R7). Sede = texto default `"Consultorio"` (patrón `Sillon.sede`; multi-sede real fuera de scope). Alternativa descartada: UNIQUE parcial solo-abierto — permitiría dos cierres históricos del mismo día tras reapertura/cierre y rompería "un cierre por día/sede".
+4. **Bloqueo de día cerrado con `422` (no `409`).** `POST movimientos` con `fecha` cuyo cierre está `cerrado` → `422 dia_cerrado` (error de negocio por validación, coherente con `422` de dominio del proyecto; el `409` se reserva a colisión de recurso: doble cierre). El chequeo vive en el servicio dentro de la transacción (`SELECT cierre ... FOR UPDATE`) para que reapertura/cierre concurrentes no dejen movimientos huérfanos. Alternativa descartada: `403` — el operador SÍ tiene permiso; lo que falla es el estado del día.
+5. **Reapertura: endpoint propio, solo admin, auditada.** `POST /api/v1/caja/reapertura {fecha, sede, motivo}` con `require_admin()` (recurso nuevo `reapertura_caja` solo `admin`; recepción/odontólogo → `403` genérico + `AuditoriaLog` `reapertura_denegada` con solo `{fecha, sede, usuario_id}`); `motivo` obligatorio (≥10 caracteres) y evento `cierre_reabierto` con `{cierre_id, fecha, sede, motivo, reaperturas}`. El `GET` de cierre expone `estado` + `reaperturas` para trazabilidad. Alternativa descartada: reabrir con `DELETE cierre` — destruiría el snapshot y violaría append-only/RN-AU-03.
+6. **RBAC: recursos nuevos `caja` y `reapertura_caja` (standard fastapi + matriz C-02).** `caja` → `{admin, recepcion}` (movimientos, cierre, consultas); `reapertura_caja` → `{admin}`; odontólogo → `403` en todo caja (deny-by-default intacto; matriz existente sin cambios). Todos los endpoints bajo `/api/v1` exigen JWT (a diferencia de los webhooks C-06/C-08, caja nunca es pública).
+7. **Privacidad y secretos (R6/R7, Ley 25.326, dinero severidad alta).** Logs/diffs solo con `{movimiento_id|cierre_id, fecha, sede, tipo, metodo, monto, diferencia, estado}` + `usuario_id`; el `concepto` libre se sanea con `sanitizar_diff()` (denylist: DNI/tel/HCE/tokens) y se trunca a 280 caracteres — JAMÁS se loguea el concepto crudo. Sin settings nuevos con default sensible: `CAJA_TZ` default zona AR (no sensible); `.env.example` solo placeholders. Tests con montos ARS sintéticos y usuarios ficticios (R0).
+8. **Testing (plan, se ejecuta en apply — R5, AAA, cov 80):** pytest sobre Postgres real; casos: movimiento válido por método (los 4) → `201` + evento; método inválido → `422`; cierre con movimientos MP que matchean acreditados → `cuadrado`; cierre con faltante/sobrante → `con_diferencia` con `diferencia` exacta; doble cierre mismo día/sede secuencial y concurrente → `409` con UN solo renglón; movimiento en día cerrado → `422`; reapertura admin → `200` + `abierto` + evento; reapertura recepción/odontólogo → `403` + `reapertura_denegada`; regresión C-08 (acreditación sigue confirmando turno sin crear movimientos).
+
+## Risks / Trade-offs
+
+- [Riesgo] Cierre concurrente duplica renglón → Mitigación: `UNIQUE(fecha, sede)` + `IntegrityError→409`; la DB manda.
+- [Riesgo] Movimiento MP manual duplica un acreditado (doble conteo) → Mitigación: `pago_id` opcional + validación (un `pago_id` en un solo movimiento de ingreso); la conciliación reporta el desvío en vez de ocultarlo.
+- [Riesgo] Concepto libre con PII (el operador escribe "pago de Juan 20.123.456") → Mitigación: sanitización + truncado antes de log/auditar; contrato documentado en el schema (`concepto` admite texto libre, se almacena pero nunca se expone en logs).
+- [Trade-off] Sede como texto vs FK. Se acepta texto (coherente con `Sillon.sede`, MVP una sede); costo: C multi-sede futuro necesita backfill — mitigación: default único + índice.

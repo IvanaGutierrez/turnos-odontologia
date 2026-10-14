@@ -1,0 +1,45 @@
+{
+  "name": "turnos-odontologia-frontend",
+  "private": true,
+  "version": "0.1.0",
+  "description": "SPA de turnos odontológicos (C-10 frontend-agenda-reserva). Parte 1: scaffolding + tests en ROJO.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit -p tsconfig.app.json && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit -p tsconfig.app.json",
+    "typecheck:all": "tsc --noEmit",
+    "lint": "eslint src --ext .ts,.tsx",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "e2e": "playwright test"
+  },
+  "dependencies": {
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "react-router-dom": "^6.28.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.15.0",
+    "@playwright/test": "^1.48.2",
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.1.0",
+    "@testing-library/user-event": "^14.5.2",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "eslint": "^9.15.0",
+    "jsdom": "^26.1.0",
+    "msw": "^2.6.4",
+    "typescript": "^5.6.3",
+    "typescript-eslint": "^8.15.0",
+    "vite": "^5.4.11",
+    "vitest": "^2.1.8"
+  },
+  "msw": {
+    "workerDirectory": [
+      "public"
+    ]
+  }
+}

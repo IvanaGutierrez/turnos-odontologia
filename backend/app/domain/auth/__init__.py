@@ -1,0 +1,1 @@
+"""Subdominio auth (matriz + permisos)."""

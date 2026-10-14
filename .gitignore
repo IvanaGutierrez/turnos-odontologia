@@ -1,0 +1,36 @@
+# Secretos locales (R7: jamás commitear)
+.env
+backend/.env
+*.env.local
+
+# Entornos virtuales Python
+.venv/
+venv/
+env/
+backend/.venv/
+backend/venv/
+
+# Cachés Python / test / lint
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Node / frontend build
+node_modules/
+dist/
+build/
+*.local
+
+# Memoria local de agentes (no versionar sin pedido explícito)
+.engram/
+
+# Estado local del orquestador
+.active-orchestrator-state.json
+
+# Sistema
+.DS_Store
+Thumbs.db
