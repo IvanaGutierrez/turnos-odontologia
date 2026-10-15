@@ -139,16 +139,65 @@ def _usar_redis_falso() -> None:
     settings.usar_redis_falso = True
 
 
+# Tablas con datos de prueba (se preservan `catalogo_odontograma_estado`
+# —semilla de migración— y `alembic_version`: jamás se truncan).
+TABLAS_RESET_TEST: tuple[str, ...] = (
+    "oferta_espera",
+    "lista_espera",
+    "validacion_cobertura",
+    "afiliacion_os",
+    "obra_social",
+    "movimiento_caja",
+    "cierre_diario",
+    "pago",
+    "plan_tratamiento",
+    "presupuesto_item",
+    "presupuesto",
+    "evolucion",
+    "odontograma_entry",
+    "ficha",
+    "aviso_envio",
+    "verificacion_publica",
+    "clave_idempotencia",
+    "bloqueo",
+    "horario_profesional",
+    "turno",
+    "paciente",
+    "profesional",
+    "sillon",
+    "prestacion",
+    "auditoria_log",
+    "sesion_refresh",
+    "usuario",
+)
+
+
+async def _reset_total(sesion: AsyncSession) -> None:
+    """Autoreset: base totalmente limpia antes de cada test (C-14).
+
+    Un solo `TRUNCATE ... CASCADE` (el orden lo resuelve el motor): ni
+    siquiera una corrida matada a la mitad deja residuos —usuarios
+    huérfanos (`usuario_email_key`), prestaciones/turnos sin cleanup,
+    ofertas colgadas—. Después `seed_demo.seed` recrea el consultorio
+    demo idempotente. Cada test corre aislado y determinista.
+    """
+    await sesion.execute(
+        text(f"TRUNCATE {', '.join(TABLAS_RESET_TEST)} CASCADE")
+    )
+
+
 @pytest_asyncio.fixture(autouse=True)
 async def _aislar_turnos() -> AsyncGenerator[None, None]:
     """Seed idempotente antes + limpieza total después (aislamiento C-02).
 
-    Purga turnos/pacientes nuevos + sesiones y auditoría huérfanas: ningún
-    test ve filas de otro (los asserts de conteo son deterministas).
-    C-03: también purga las tablas de agenda pública (idempotencia,
-    verificación, horarios, bloqueos) antes y después.
+    El setup arranca con `_reset_total`: ningún test ve filas de otro
+    (los asserts de conteo son deterministas) aunque una corrida previa
+    haya muerto sin teardown. C-03: también purga las tablas de agenda
+    pública (idempotencia, verificación, horarios, bloqueos) antes y
+    después.
     """
     async with TestSession() as sesion:
+        await _reset_total(sesion)
         await seed_demo.seed(sesion)
         await _purgar_agenda_publica(sesion)
         await _purgar_clinica(sesion)

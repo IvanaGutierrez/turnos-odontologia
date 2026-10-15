@@ -191,6 +191,12 @@ async def test_doble_pago_concurrente_threads_un_solo_ganador(
         cuerpo1, cab1 = _cabeceras(mp1, "req-doble-0001", "1700000201")
         cuerpo2, cab2 = _cabeceras(mp2, "req-doble-0002", "1700000202")
         estados: dict[int, int] = {}
+        errores: dict[int, str] = {}
+        cerrojo = threading.Lock()
+        # Barrera: ambos hilos disparan el POST en el mismo instante para
+        # que la colisión GiST sea real y determinista (no serializada por
+        # el scheduler).
+        barrera = threading.Barrier(2)
 
         def _post_en_hilo(n: int) -> None:
             async def _run() -> None:
@@ -199,20 +205,33 @@ async def test_doble_pago_concurrente_threads_un_solo_ganador(
                     base_url="http://test",
                 ) as c:
                     cuerpo, cab = (cuerpo1, cab1) if n == 0 else (cuerpo2, cab2)
+                    barrera.wait(timeout=60)
                     r = await c.post(WEBHOOK_URL, content=cuerpo, headers=cab)
-                    estados[n] = r.status_code
+                    with cerrojo:
+                        estados[n] = r.status_code
 
-            asyncio.run(_run())
+            try:
+                asyncio.run(_run())
+            except Exception as exc:  # noqa: BLE001 — se reporta abajo.
+                with cerrojo:
+                    errores[n] = f"{type(exc).__name__}: {exc}"
 
         # Act: dos pagos acreditados concurrentes en threads reales.
-        hilos = [threading.Thread(target=_post_en_hilo, args=(n,)) for n in (0, 1)]
+        hilos = [
+            threading.Thread(target=_post_en_hilo, args=(n,), daemon=True)
+            for n in (0, 1)
+        ]
         for h in hilos:
             h.start()
         for h in hilos:
             h.join(timeout=60)
 
-        # Assert: ambas 200, UN solo turno, UNA asignada, otro reembolsado.
-        assert estados == {0: 200, 1: 200}
+        # Assert: hilos sanos y respuestas completas (sin esta guarda, un
+        # hilo caído se vería como "estructura distinta" en `estados`).
+        assert not any(h.is_alive() for h in hilos), "hilo colgado tras 60s"
+        assert errores == {}, f"fallo en hilos: {errores}"
+        assert estados == {0: 200, 1: 200}, f"respuestas: {estados}"
+        # Assert: UN solo turno, UNA asignada, otro reembolsado.
         async with TestSession() as sesion:
             n_turnos = await sesion.scalar(
                 text(

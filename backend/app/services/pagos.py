@@ -27,7 +27,7 @@ from uuid import UUID
 
 from sqlalchemy import select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.logger import get_logger
@@ -325,6 +325,22 @@ async def _insertar_pago(
     return fila
 
 
+def _es_interbloqueo(exc: BaseException) -> bool:
+    """Detecta `deadlock detected` (SQLSTATE 40P01) del driver.
+
+    Dos `INSERT` concurrentes bajo el GiST de exclusión pueden
+    interbloquearse (cada uno espera el lock especulativo del otro) y
+    Postgres aborta UNO con 40P01: ese es el perdedor de la carrera y va
+    por el camino de reembolso, igual que ante `ExclusionViolation`.
+    """
+    causa = getattr(exc, "orig", None)
+    if causa is None:
+        return False
+    if str(getattr(causa, "sqlstate", "")).upper() == "40P01":
+        return True
+    return "deadlock detected" in str(causa).lower()
+
+
 async def _reembolsar_oferta(
     session: AsyncSession,
     *,
@@ -560,6 +576,17 @@ async def _procesar_aviso_oferta(
         await session.flush()
     except IntegrityError:
         # El GiST decidió: otro canal o un concurrente tomó el slot.
+        carrera_perdida = True
+    except DBAPIError as exc:
+        # Interbloqueo entre los dos `INSERT` concurrentes: Postgres
+        # abortó este; es el perdedor de la carrera.
+        if not _es_interbloqueo(exc):
+            raise
+        logger.info("carrera de ofertas resuelta por interbloqueo")
+        carrera_perdida = True
+    else:
+        carrera_perdida = False
+    if carrera_perdida:
         await session.rollback()
         oferta = await session.get(OfertaEspera, oferta_pk)
         assert oferta is not None
