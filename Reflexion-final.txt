@@ -1,0 +1,85 @@
+Reflexión escrita y retrospectiva del proceso OPSX
+
+Proyecto: Sistema de Gestión Odontológica
+
+Materia: Programación 3 — Tecnicatura Universitaria en Programación (UTN FRM)
+
+Integrantes: Ivana Gutiérrez, Julieta Chávez, Rayssa Alejo y Brisa Muñoz.
+
+1. ¿Qué información del Discovery resultó incorrecta, no verificable o inventada por el agente? ¿Cómo lo detectaron?
+
+Durante la etapa de Discovery encontramos algunos datos que nos llamaron la atención y que tuvimos que revisar para saber si eran correctos.
+
+Uno de los casos fue el de las obras sociales y prepagas. Al principio, se planteó la posibilidad de conectar el sistema con una API que permitiera consultar las coberturas en tiempo real. Cuando investigamos, vimos que no existe una API pública que permita hacer estas consultas para todas las entidades de la misma manera, por lo que no era tan fácil implementar esta función como pensábamos.
+
+También tuvimos que investigar mejor la integración con WhatsApp Business, porque el agente no había tenido en cuenta todos los requisitos y costos que implica utilizar esta herramienta.
+
+Otro dato que no pudimos confirmar fueron los precios de algunos sistemas de gestión odontológica, como Dentalink y DentalTec. El agente había mencionado precios concretos, pero al buscar información vimos que algunos proveedores no publican sus tarifas y es necesario solicitar una cotización.
+
+Para detectar estos errores, comparamos la información con documentación oficial y otras fuentes de internet. También investigamos los sistemas que ya existen en el mercado. Así pudimos identificar qué información era confiable y qué cosas necesitaban corregirse antes de continuar con el proyecto.
+
+2. ¿En qué etapa usaron Ajustar, qué estaba mal y qué habría pasado si hubieran apretado Continuar?
+
+Utilizamos la opción Ajustar durante la etapa de especificación, cuando estábamos definiendo cómo debía funcionar el sistema y cómo íbamos a realizar las pruebas. Nos enfocamos principalmente en el módulo C-14, que corresponde a la lista de espera inteligente.
+
+Encontramos algunos problemas relacionados con la base de datos, ya que las pruebas generaban registros nuevos en cada ejecución y no estaba bien resuelto cómo limpiar los datos anteriores. Esto podía provocar que se acumularan registros y aparecieran errores al volver a ejecutar las pruebas.
+
+También faltaba definir mejor qué debía pasar cuando se cancelaba un turno y se ofrecía a otra persona, especialmente si dos pacientes intentaban pagar la seña al mismo tiempo.
+
+Si hubiéramos continuado sin hacer estos cambios, podrían haber aparecido errores al ejecutar las pruebas y problemas al guardar los datos. En el peor de los casos, dos pacientes podrían haber terminado reservando el mismo turno.
+
+Por eso decidimos corregir estos puntos antes de avanzar. Nos pareció importante revisar bien el funcionamiento del sistema desde el principio para evitar problemas más difíciles de solucionar cuando el código estuviera terminado.
+
+3. ¿Qué diferencia notaron entre implementar con una especificación aprobada y pedir código con un prompt suelto?
+
+La principal diferencia que notamos fue que trabajar con una especificación aprobada nos permitió tener una idea mucho más clara de lo que teníamos que hacer.
+
+Con OPSX, primero definimos los requisitos y las reglas que debía cumplir el sistema. Esto nos ayudó a trabajar de forma más ordenada y a evitar que el agente interpretara las instrucciones de una manera diferente a la que necesitábamos.
+
+En cambio, cuando se pide código con un prompt suelto, puede pasar que el código funcione para una situación puntual, pero que después aparezcan errores cuando se integra con el resto del sistema.
+
+Otra ventaja fue que pudimos detectar algunos problemas antes de empezar a programar. Corregir una regla durante la especificación resultó más sencillo que tener que modificar después el código, la base de datos y las pruebas.
+
+También pudimos prestar más atención a cuestiones como los errores, la concurrencia y el manejo de los datos. En general, creemos que trabajar con una especificación aprobada nos ayudó a entender mejor lo que estábamos desarrollando y a evitar algunos problemas durante la implementación.
+
+4. ¿Qué parte de la fundación (knowledge-base, roadmap, reglas) le aportó más valor al ciclo OPSX y cuál menos?
+
+La parte que más nos ayudó fue la Knowledge-Base junto con el archivo de reglas de negocio, porque ahí dejamos por escrito cómo debía funcionar el sistema.
+
+Por ejemplo, definimos que no se podían superponer turnos para un mismo profesional o sillón, qué condiciones debían cumplirse para cancelar una reserva y cómo se tenían que manejar las señas y los estados de los turnos.
+
+Tener esta información organizada nos permitió trabajar con requisitos más claros y ayudó a que el agente tuviera una referencia para generar las propuestas.
+
+Por otro lado, el roadmap inicial fue la parte que menos utilizamos a medida que avanzaba el proyecto. Al principio nos sirvió para organizarnos y saber qué tareas teníamos que realizar, pero después tuvimos que cambiar algunas prioridades según los problemas que iban apareciendo.
+
+De todas formas, creemos que fue útil para empezar a organizar el trabajo, aunque tuvimos que adaptarlo durante el desarrollo.
+
+5. Distribución de roles y trabajo en grupo
+
+Para realizar el proyecto, nos dividimos las tareas según las diferentes etapas de OPSX. De esta manera, cada integrante pudo trabajar en una parte y después pudimos unir todo para avanzar con el sistema.
+
+Ivana Gutiérrez — Integración y pruebas
+
+Se encargó de trabajar en las pruebas del sistema con PostgreSQL. Durante esta etapa encontró problemas relacionados con la acumulación de datos entre las ejecuciones y colaboró en la solución mediante la limpieza de las tablas de prueba desde el archivo conftest.py.
+
+También participó en las pruebas de concurrencia, el seguimiento de los cambios realizados en Git y la organización del archivo CHANGES.md.
+
+Julieta Chávez — Discovery e investigación
+
+Se encargó de investigar los sistemas de gestión odontológica que existen en Argentina y Latinoamérica. También revisó la información que había proporcionado el agente y detectó algunos datos que no se podían comprobar, especialmente los relacionados con las APIs de obras sociales y WhatsApp Business.
+
+Su investigación nos ayudó a conocer mejor las opciones disponibles y a tener una idea más realista de las funciones que podíamos incluir en nuestro proyecto.
+
+Rayssa Alejo — Especificación y reglas de negocio
+
+Trabajó en la organización de la Knowledge-Base y en la documentación de las reglas de negocio. También participó en la definición del módulo C-14, relacionado con la lista de espera inteligente.
+
+Se enfocó en definir cómo debían funcionar los estados de los turnos, cómo se debían volver a ofrecer los turnos cancelados y qué debía suceder en los casos de pagos realizados fuera del tiempo establecido.
+
+Brisa Muñoz — Desarrollo del backend
+
+Se encargó del desarrollo del backend, trabajando con FastAPI para crear los endpoints y con SQLAlchemy y AsyncPG para el manejo de la base de datos.
+
+También trabajó en las migraciones con Alembic y en la revisión de los modelos y las relaciones entre las tablas. Además, participó en el manejo de errores para evitar problemas cuando se realizan varias operaciones al mismo tiempo.
+
+En conclusión, dividir las tareas nos ayudó a organizarnos mejor y a avanzar con las distintas partes del proyecto. También nos permitió entender la importancia de revisar la información antes de implementar, definir bien los requisitos y probar el sistema para detectar errores a tiempo.
