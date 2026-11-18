@@ -55,7 +55,11 @@ async def _clinico_o_403(
     recurso: str = "ficha_clinica",
 ) -> Usuario:
     """Gate clínico: solo roles de la matriz; resto → 403 + auditoría sin PII."""
-    if not puede(usuario.rol, recurso):
+    claims = getattr(request.state, "claims", {})
+    roles = claims.get("roles") or [usuario.rol]
+    if isinstance(roles, str):
+        roles = [roles]
+    if not any(puede(r, recurso) for r in roles):
         await repo_auditoria.registrar_auditoria(
             session,
             accion="acceso_clinico_denegado",

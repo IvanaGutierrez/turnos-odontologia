@@ -18,6 +18,7 @@ See `_shared/skill-resolver.md` for the full resolution protocol.
 | Browser automation, testing web pages, Playwright tests, E2E flows | playwright-cli | C:\Users\Ivana Gutierrez\.agents\skills\playwright-cli\SKILL.md |
 | Writing Python tests, setting up test suites, TDD, fixtures, mocking, pytest best practices | python-testing-patterns | C:\Users\Ivana Gutierrez\.agents\skills\python-testing-patterns\SKILL.md |
 | Reviewing a branch, PR, or work-in-progress changes; "review since X" (commit, branch, tag, merge-base) | code-review | C:\Users\Ivana Gutierrez\.agents\skills\code-review\SKILL.md |
+| Auditing change proposals, architectural designs, specs, or tasks against odontology business rules (RN-AG, RN-CL, RN-AU), biosecurity/disinfection, and Argentine health/privacy laws (Ley 26.529, Ley 25.326/R6) | auditor-reglas-clinicas-sdd | .agents\skills\auditor-reglas-clinicas-sdd\SKILL.md |
 
 ## Compact Rules
 
@@ -101,10 +102,20 @@ Pre-digested rules per skill. Delegators copy matching blocks into sub-agent pro
 - Spec source order: commit issue refs (via `docs/agents/issue-tracker.md`) → user-passed path → `docs/`/`specs/`/`.scratch/` match → ask; no spec = skip Spec axis explicitly ("no spec available")
 - Report per finding: Standards (standard file + rule, or smell name + quoted hunk) and Spec (missing/partial requirements, scope creep, looks-implemented-but-wrong, each with quoted spec line); end with one-line totals + worst issue per axis
 
+### auditor-reglas-clinicas-sdd
+- Audits OpenSpec artifacts (proposal.md, design.md, specs/*.md, tasks.md) BEFORE code is written (propose/apply gates)
+- Check RN-AG-01: zero tolerance for overlapping appointments or chair blocks; require PostgreSQL exclusion constraints (EXCLUDE USING gist with tstzrange) as defense in depth (R3)
+- Check RN-AG-04: enforce 20-30 min disinfection windows for bioaerosol-generating invasive dental procedures
+- Check Ley 25.326 & Rule R6: zero PII (DNI, phone, clinical notes) in URLs, error messages, logs, or public responses; generic reason strings only
+- Check Ley 26.529: clinical records (HCE) remain strictly isolated and encrypted (AES-256-GCM); operational agenda decoupled from clinical details
+- Check RBAC: chair blocks restricted to admin/recepcion; odontologo cannot block third-party resources
+- Emit structured verdict: [APROBADO], [ADVERTENCIA], or [BLOQUEANTE] with remediation steps
+
 ## Project Conventions
 
 | File | Path | Notes |
 |------|------|-------|
-| (none) | — | No convention files found. `CLAUDE.md`/`AGENTS.md` do not exist yet (generated later by `agent-instruction`); section intentionally empty. |
+| AGENTS.md | AGENTS.md | Reglas duras R0-R8, stack fijo, matriz de agentes/skills y roadmap C-01..C-15 |
+| CLAUDE.md | CLAUDE.md | Copia espejo canónica de AGENTS.md para agentes Claude/Antigravity |
 
 Read the convention files listed above for project-specific patterns and rules. All referenced paths have been extracted — no need to read index files to discover more.

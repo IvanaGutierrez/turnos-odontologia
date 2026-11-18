@@ -50,7 +50,11 @@ async def _presupuesto_o_403(
     usuario: Annotated[Usuario, Depends(get_current_user)],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> Usuario:
-    if not puede(usuario.rol, "presupuesto"):
+    claims = getattr(request.state, "claims", {})
+    roles = claims.get("roles") or [usuario.rol]
+    if isinstance(roles, str):
+        roles = [roles]
+    if not any(puede(r, "presupuesto") for r in roles):
         await repo_auditoria.registrar_auditoria(
             session,
             accion="acceso_clinico_denegado",

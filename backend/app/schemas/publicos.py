@@ -4,10 +4,11 @@ La reserva reutiliza `PacienteCreate` (validación AR DNI/E.164) y nunca
 acepta `fin` libre: se calcula desde la prestación (RN-AG-03).
 """
 
+from typing import Any
 import uuid
 from datetime import datetime
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict
+from pydantic import AwareDatetime, BaseModel, ConfigDict, model_validator
 
 from app.schemas.turno import PacienteCreate
 
@@ -22,6 +23,20 @@ class TurnoPublicoCreate(BaseModel):
     inicio: AwareDatetime
     paciente: PacienteCreate
     codigo_verificacion: str | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _armar_paciente_plano(cls, data: Any) -> Any:
+        if isinstance(data, dict) and "paciente" not in data:
+            if "dni" in data and "telefono" in data:
+                nombre = data.get("nombre") or f"Paciente Demo {str(data['dni'])[-4:]}"
+                data["paciente"] = {
+                    "nombre": nombre,
+                    "dni": str(data["dni"]),
+                    "telefono": str(data["telefono"]),
+                    "consentimiento_hc": data.get("consentimiento_hc", False),
+                }
+        return data
 
 
 class TurnoPublicoRead(BaseModel):

@@ -192,13 +192,22 @@ export const handlers = [
         headers: { "Retry-After": "60", "Content-Type": "application/json" },
       });
     }
-    if (cuerpo.email === "recepcion@consultorio.test") {
+    if (
+      cuerpo.email === "recepcion@consultorio.test" ||
+      cuerpo.email === "recepcion.demo@consultorio.example"
+    ) {
       return HttpResponse.json({ access_token: ACCESS_FICTICIO }, { status: 200 });
     }
-    if (cuerpo.email === "admin@consultorio.test") {
+    if (
+      cuerpo.email === "admin@consultorio.test" ||
+      cuerpo.email === "admin.demo@consultorio.example"
+    ) {
       return HttpResponse.json({ access_token: ACCESS_ADMIN_FICTICIO }, { status: 200 });
     }
-    if (cuerpo.email === "odontologo@consultorio.test") {
+    if (
+      cuerpo.email === "odontologo@consultorio.test" ||
+      cuerpo.email === "odontologo.demo@consultorio.example"
+    ) {
       return HttpResponse.json({ access_token: ACCESS_ODONTOLOGO_FICTICIO }, { status: 200 });
     }
     return HttpResponse.json({ detalle: "Credenciales inválidas." }, { status: 401 });
@@ -457,21 +466,21 @@ export const handlers = [
 
   // --- autogestión por token (C-05) ---
   http.get(`${API}/turnos/publicos/:token`, ({ params }) => {
-    if (params["token"] !== TOKEN_VALIDO) {
+    if (params["token"] !== TOKEN_VALIDO && params["token"] !== "demo-token-c05-autogestion-ficticia-no-real") {
       return HttpResponse.json(NO_ENCONTRADO_GENERICO, { status: 404 });
     }
     return HttpResponse.json(turnoPropioFicticio("reservado"), { status: 200 });
   }),
 
   http.post(`${API}/turnos/publicos/:token/confirmar`, ({ params }) => {
-    if (params["token"] !== TOKEN_VALIDO) {
+    if (params["token"] !== TOKEN_VALIDO && params["token"] !== "demo-token-c05-autogestion-ficticia-no-real") {
       return HttpResponse.json(NO_ENCONTRADO_GENERICO, { status: 404 });
     }
     return HttpResponse.json(turnoPropioFicticio("confirmado"), { status: 200 });
   }),
 
   http.post(`${API}/turnos/publicos/:token/cancelar`, ({ params, request }) => {
-    if (params["token"] !== TOKEN_VALIDO) {
+    if (params["token"] !== TOKEN_VALIDO && params["token"] !== "demo-token-c05-autogestion-ficticia-no-real") {
       return HttpResponse.json(NO_ENCONTRADO_GENERICO, { status: 404 });
     }
     const url = new URL(request.url);
@@ -488,7 +497,7 @@ export const handlers = [
   }),
 
   http.post(`${API}/turnos/publicos/:token/reprogramar`, ({ params }) => {
-    if (params["token"] !== TOKEN_VALIDO) {
+    if (params["token"] !== TOKEN_VALIDO && params["token"] !== "demo-token-c05-autogestion-ficticia-no-real") {
       return HttpResponse.json(NO_ENCONTRADO_GENERICO, { status: 404 });
     }
     return HttpResponse.json(
@@ -579,7 +588,7 @@ export const handlers = [
 
   // --- pago seña (C-08, fuera de /api/v1) ---
   http.get("*/pagar/:token", ({ params }) => {
-    if (params["token"] !== TOKEN_VALIDO) {
+    if (params["token"] !== TOKEN_VALIDO && params["token"] !== "demo-token-c05-autogestion-ficticia-no-real") {
       return HttpResponse.json(NO_ENCONTRADO_GENERICO, { status: 404 });
     }
     return HttpResponse.json(linkPagoFicticio(), { status: 200 });

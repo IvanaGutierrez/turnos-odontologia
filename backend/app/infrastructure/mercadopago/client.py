@@ -152,16 +152,49 @@ class HttpMercadoPagoClient:
         }
 
 
+class FakeMercadoPagoClientDev:
+    """Fake básico para desarrollo y demostración cuando MP_CLIENT=fake."""
+
+    def __init__(self) -> None:
+        self._seq = 0
+
+    async def crear_preferencia(
+        self,
+        *,
+        monto: Decimal,
+        moneda: str,
+        metadata: dict[str, str],
+    ) -> dict[str, Any]:
+        self._seq += 1
+        return {
+            "id": f"pref-demo-{self._seq:04d}",
+            "init_point": f"https://www.mercadopago.com.ar/checkout/v1/redirect?pref_id=demo-{self._seq:04d}",
+            "monto": monto,
+            "moneda": moneda,
+            "metadata": dict(metadata),
+        }
+
+    async def obtener_pago(self, mp_payment_id: str) -> dict[str, Any] | None:
+        return {
+            "id": mp_payment_id,
+            "estado": "aprobado",
+            "monto": Decimal("3000.00"),
+            "moneda": MONEDA_SENA,
+            "metadata": {},
+        }
+
+
 def cliente_para_app(app: Any) -> MercadoPagoClient:
     """Resuelve el cliente según `MP_CLIENT` (design decisión 2).
 
     `fake` → `app.state.mp_fake` (la instancia que cada test programa;
-    sin ella, no disponible en vez de red real). `http` → cliente prod.
+    en dev levanta un fake por defecto si no fue inyectado). `http` → cliente prod.
     """
     if settings.mp_client == "fake":
         fake = getattr(app.state, "mp_fake", None)
         if fake is None:
-            raise MercadoPagoNoDisponibleError("mp_fake_no_inyectado")
+            fake = FakeMercadoPagoClientDev()
+            app.state.mp_fake = fake
         return fake  # type: ignore[no-any-return]
     return HttpMercadoPagoClient(
         access_token=settings.mp_access_token,

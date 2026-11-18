@@ -2,6 +2,7 @@
 .env
 backend/.env
 *.env.local
+.mcp.json
 
 # Entornos virtuales Python
 .venv/

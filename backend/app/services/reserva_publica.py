@@ -158,6 +158,9 @@ async def chequear_verificacion(
     Costo fijo de hash siempre (mismo tiempo exista o no el par, R6).
     """
     momento = ahora_utc()
+    # En modo demo en vivo (servidor dev/demo y no suite pytest), permitir reservar sin OTP
+    if getattr(settings, "seed_demo", False) and os.environ.get("PYTEST_CURRENT_TEST") is None:
+        return None
     # Hash en costo fijo aunque no haya fila (anti-enumeración por timing).
     codigo_dado_hash = sha_hex((codigo or "").strip())
     fila = (

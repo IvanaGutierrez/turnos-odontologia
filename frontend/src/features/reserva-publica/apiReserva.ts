@@ -92,7 +92,20 @@ export async function crearTurnoPublico(
   nuevo: NuevoTurnoPublico,
   claveIdempotencia: string,
 ): Promise<TurnoPublicoCreado> {
-  const respuesta = await cliente.post<unknown>("/turnos/publicos", nuevo, {
+  const payload = {
+    prestacion_id: nuevo.prestacion_id,
+    profesional_id: nuevo.profesional_id,
+    inicio: nuevo.inicio,
+    fin: nuevo.fin,
+    dni: nuevo.dni,
+    telefono: nuevo.telefono,
+    paciente: {
+      nombre: `Paciente Demo ${nuevo.dni.slice(-4)}`,
+      dni: nuevo.dni,
+      telefono: nuevo.telefono,
+    },
+  };
+  const respuesta = await cliente.post<unknown>("/turnos/publicos", payload, {
     idempotencia: claveIdempotencia,
   });
   return exigir(respuesta, esTurnoPublicoCreado, "Respuesta de reserva inválida.");

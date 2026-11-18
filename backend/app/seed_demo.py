@@ -31,6 +31,13 @@ ID_PRESTACION_LIMPIEZA_45 = uuid.UUID("55555555-5555-4555-8555-555555555555")
 ID_PRESTACION_CONSULTA_30 = uuid.UUID("66666666-6666-4666-8666-666666666666")
 ID_PACIENTE_DEMO = uuid.UUID("77777777-7777-4777-8777-777777777777")
 
+# IDs frontend catalog (para compatibilidad con reserva pública en navegador)
+ID_PROFESIONAL_FE_A = uuid.UUID("20000000-0000-4000-8000-000000000001")
+ID_PROFESIONAL_FE_B = uuid.UUID("20000000-0000-4000-8000-000000000002")
+ID_PRESTACION_FE_1 = uuid.UUID("10000000-0000-4000-8000-000000000001")
+ID_PRESTACION_FE_2 = uuid.UUID("10000000-0000-4000-8000-000000000002")
+ID_PRESTACION_FE_3 = uuid.UUID("10000000-0000-4000-8000-000000000003")
+
 # C-04: turnos demo con IDs fijos (idempotencia por PK; fecha 2026-12-01 a
 # propósito fuera de las ventanas de fixtures de la suite — ningún test
 # cuenta turnos absolutos ese día ni filtra esa ventana).
@@ -39,6 +46,8 @@ ID_TURNO_DEMO_2 = uuid.UUID("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2")
 ID_SOBRETURNO_DEMO = uuid.UUID("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa3")
 
 EMAIL_ADMIN_DEMO = "admin.demo@consultorio.example"
+EMAIL_RECEPCION_DEMO = "recepcion.demo@consultorio.example"
+EMAIL_ODONTOLOGO_DEMO = "odontologo.demo@consultorio.example"
 
 # (nombre, duracion_min); las dos primeras con ID fijo (las usan los tests).
 PRESTACIONES_DEMO: tuple[tuple[str, int, uuid.UUID | None], ...] = (
@@ -48,29 +57,38 @@ PRESTACIONES_DEMO: tuple[tuple[str, int, uuid.UUID | None], ...] = (
     ("Extracción", 45, None),
     ("Control Ortodoncia", 30, None),
     ("Urgencia", 20, None),
+    ("Limpieza (Online)", 30, ID_PRESTACION_FE_1),
+    ("Control (Online)", 20, ID_PRESTACION_FE_2),
+    ("Consulta de urgencia (Online)", 30, ID_PRESTACION_FE_3),
 )
 
 
 async def seed(session: AsyncSession) -> None:
     """Inserta lo faltante; todo lookup es por PK o unique → idempotente."""
-    admin = (
-        await session.execute(select(Usuario).where(Usuario.email == EMAIL_ADMIN_DEMO))
-    ).scalar_one_or_none()
-    if admin is None:
-        # C-02 (design plan de migración): hash Argon2id generado al sembrar
-        # (R0: credencial ficticia a rotar en el primer login real; el valor
-        # puede fijarse vía `SEED_DEMO_PASSWORD`, nunca en código — R7).
-        demo_password = os.environ.get(
-            "SEED_DEMO_PASSWORD", "Demo-Ficticia-No-Real-0000"
-        )
-        session.add(
-            Usuario(
-                email=EMAIL_ADMIN_DEMO,
-                password_hash=hashear_password(demo_password),
-                rol="admin",
-                activo=True,
+    demo_password = os.environ.get(
+        "SEED_DEMO_PASSWORD", "cambiar-esta-demo-no-real"
+    )
+    for email, rol in (
+        (EMAIL_ADMIN_DEMO, "admin"),
+        (EMAIL_RECEPCION_DEMO, "recepcion"),
+        (EMAIL_ODONTOLOGO_DEMO, "odontologo"),
+    ):
+        user = (
+            await session.execute(select(Usuario).where(Usuario.email == email))
+        ).scalar_one_or_none()
+        if user is None:
+            session.add(
+                Usuario(
+                    email=email,
+                    password_hash=hashear_password(demo_password),
+                    rol=rol,
+                    activo=True,
+                )
             )
-        )
+        else:
+            user.password_hash = hashear_password(demo_password)
+            user.activo = True
+            user.rol = rol
 
     for sid, nombre in (
         (ID_SILLON_S1, "Sillón Demo 1"),
@@ -82,6 +100,8 @@ async def seed(session: AsyncSession) -> None:
     for pid, nombre, matricula in (
         (ID_PROFESIONAL_A, "Profesional Demo A", "DEMO-MAT-A-001"),
         (ID_PROFESIONAL_B, "Profesional Demo B", "DEMO-MAT-B-002"),
+        (ID_PROFESIONAL_FE_A, "Dra. Ficticia A", "DEMO-MAT-FE-001"),
+        (ID_PROFESIONAL_FE_B, "Dr. Ficticio B", "DEMO-MAT-FE-002"),
     ):
         if await session.get(Profesional, pid) is None:
             session.add(
@@ -147,37 +167,48 @@ async def seed(session: AsyncSession) -> None:
     # conversacional de ejemplo auditado marcado `demo` (idempotente).
     await _seed_conversacion_demo(session)
 
+    # C-13: Obra Social preventiva demo + afiliación (idempotente).
+    await _seed_os_demo(session)
+
+    # C-14: Lista de espera inteligente demo (idempotente).
+    await _seed_lista_espera_demo(session)
+
     await session.commit()
 
 
 async def _seed_agenda_demo(session: AsyncSession) -> None:
-    """Horario semanal demo (lunes 8–13) + bloqueo demo puntual (R0)."""
+    """Horario semanal demo + bloqueo demo puntual (R0)."""
     from datetime import date, time
     from zoneinfo import ZoneInfo
 
     ba = ZoneInfo("America/Argentina/Buenos_Aires")
-    horario_demo = (
-        await session.execute(
-            select(HorarioProfesional).where(
-                HorarioProfesional.profesional_id == ID_PROFESIONAL_A,
-                HorarioProfesional.dia_semana == 0,
-                HorarioProfesional.hora_inicio == time(8, 0),
-                HorarioProfesional.hora_fin == time(13, 0),
-            )
-        )
-    ).scalar_one_or_none()
-    if horario_demo is None:
-        session.add(
-            HorarioProfesional(
-                profesional_id=ID_PROFESIONAL_A,
-                dia_semana=0,
-                hora_inicio=time(8, 0),
-                hora_fin=time(13, 0),
-                vigente_desde=None,
-                vigente_hasta=None,
-                activo=True,
-            )
-        )
+    for prof_id in (
+        ID_PROFESIONAL_A,
+        ID_PROFESIONAL_B,
+        ID_PROFESIONAL_FE_A,
+        ID_PROFESIONAL_FE_B,
+    ):
+        for dia in range(7):
+            ya_h = (
+                await session.execute(
+                    select(HorarioProfesional).where(
+                        HorarioProfesional.profesional_id == prof_id,
+                        HorarioProfesional.dia_semana == dia,
+                    )
+                )
+            ).scalar_one_or_none()
+            if ya_h is None:
+                session.add(
+                    HorarioProfesional(
+                        profesional_id=prof_id,
+                        dia_semana=dia,
+                        hora_inicio=time(8, 0),
+                        hora_fin=time(20, 0),
+                        vigente_desde=None,
+                        vigente_hasta=None,
+                        activo=True,
+                    )
+                )
 
     dia_demo = date(2026, 12, 25)
     ya = (
@@ -206,12 +237,11 @@ async def _seed_agenda_demo(session: AsyncSession) -> None:
 
 
 async def _seed_turnos_demo(session: AsyncSession) -> None:
-    """2 turnos + 1 sobreturno ficticios para la grilla demo (R0, C-04).
+    """Turnos ficticios para la grilla demo (R0, C-04).
 
     Idempotente por PK fija; `motivo_override="demo"` los marca como
-    semilla (nunca datos reales). Profesional B + Sillón 2 el 2026-12-01:
-    fuera de toda ventana de fixtures (la suite cuenta turnos absolutos
-    solo sobre el profesional A y ventanas de noviembre).
+    semilla (nunca datos reales). Incluye turnos para hoy/esta semana y
+    turnos fijos fuera de las ventanas de fixtures.
     """
     from datetime import datetime as _dt
     from datetime import timedelta as _td
@@ -258,6 +288,40 @@ async def _seed_turnos_demo(session: AsyncSession) -> None:
                 motivo_sobreturno=motivo,
             )
         )
+
+    # Turnos para el día de HOY y esta semana (para que /agenda visualice turnos de inmediato)
+    hoy = _dt.now(ba).replace(minute=0, second=0, microsecond=0)
+    turnos_hoy_semana = (
+        (hoy.replace(hour=9), 45, ID_PROFESIONAL_A, ID_SILLON_S1, ID_PRESTACION_LIMPIEZA_45, "reservado", False, None, "online", "demo-token-hoy-0900"),
+        (hoy.replace(hour=10), 30, ID_PROFESIONAL_A, ID_SILLON_S1, ID_PRESTACION_CONSULTA_30, "confirmado", False, None, "mostrador", "demo-token-hoy-1000"),
+        (hoy.replace(hour=11), 45, ID_PROFESIONAL_B, ID_SILLON_S2, ID_PRESTACION_LIMPIEZA_45, "presente", False, None, "recepcion", "demo-token-hoy-1100"),
+        (hoy.replace(hour=12), 30, ID_PROFESIONAL_B, ID_SILLON_S2, ID_PRESTACION_CONSULTA_30, "reservado", True, "Demanda espontánea dolor agudo", "mostrador", "demo-token-hoy-1200"),
+        (hoy.replace(hour=9) + _td(days=1), 45, ID_PROFESIONAL_A, ID_SILLON_S1, ID_PRESTACION_LIMPIEZA_45, "confirmado", False, None, "online", "demo-token-manana-0900"),
+        (hoy.replace(hour=11) + _td(days=1), 30, ID_PROFESIONAL_B, ID_SILLON_S2, ID_PRESTACION_CONSULTA_30, "reservado", False, None, "recepcion", "demo-token-manana-1100"),
+        (hoy.replace(hour=10) + _td(days=2), 45, ID_PROFESIONAL_A, ID_SILLON_S1, ID_PRESTACION_LIMPIEZA_45, "reservado", False, None, "online", "demo-token-pasado-1000"),
+        (hoy.replace(hour=14) + _td(days=2), 30, ID_PROFESIONAL_B, ID_SILLON_S2, ID_PRESTACION_CONSULTA_30, "confirmado", False, None, "mostrador", "demo-token-pasado-1400"),
+    )
+    for inicio, minutos, prof_id, sil_id, prest_id, estado, es_sobreturno, motivo, canal, tok in turnos_hoy_semana:
+        ya_tok = (
+            await session.execute(select(Turno).where(Turno.token_publico == tok))
+        ).scalar_one_or_none()
+        if ya_tok is None:
+            session.add(
+                Turno(
+                    paciente_id=ID_PACIENTE_DEMO,
+                    profesional_id=prof_id,
+                    sillon_id=sil_id,
+                    prestacion_id=prest_id,
+                    inicio=inicio,
+                    fin=inicio + _td(minutes=minutos),
+                    estado=estado,
+                    canal=canal,
+                    token_publico=tok,
+                    motivo_override="demo",
+                    sobreturno=es_sobreturno,
+                    motivo_sobreturno=motivo,
+                )
+            )
 
 
 ID_TURNO_AUTOGESTION_DEMO = uuid.UUID("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1")
@@ -583,10 +647,6 @@ async def _seed_caja_demo(session: AsyncSession) -> None:
         await session.flush()
 
 
-if __name__ == "__main__":
-    asyncio.run(main())
-
-
 # C-08 seña demo (IDs fijos, R0 ficticio, idempotente por lookups).
 # Reusa "Endodoncia" del catálogo (UPDATE, sin alterar el conteo == 6 de
 # la regresión) y el turno demo-1 para el pago `acreditado` demo.
@@ -616,6 +676,17 @@ async def _seed_sena_demo(session: AsyncSession) -> None:
         endodoncia.requiere_sena = True
         endodoncia.precio_base = _Dec("20000.00")
         endodoncia.sena_monto_fijo = _Dec("5000.00")
+        await session.flush()
+
+    limpieza = (
+        await session.execute(
+            _select(Prestacion).where(Prestacion.nombre == "Limpieza")
+        )
+    ).scalar_one_or_none()
+    if limpieza is not None:
+        limpieza.requiere_sena = True
+        limpieza.precio_base = _Dec("15000.00")
+        limpieza.sena_monto_fijo = _Dec("3000.00")
         await session.flush()
 
     from app.models.entidades import Turno
@@ -715,3 +786,96 @@ async def _seed_conversacion_demo(session: AsyncSession) -> None:
                 },
             )
         )
+
+
+ID_OS_DEMO = uuid.UUID("88888888-8888-4888-8888-888888888888")
+CODIGO_OS_DEMO = "OSDE-DEMO"
+ID_AFILIACION_DEMO = uuid.UUID("18708ea6-882a-4000-b1a5-9f97d6b862b0")
+ID_LISTA_ESPERA_DEMO = uuid.UUID("99999999-9999-4999-8999-999999999991")
+
+
+async def _seed_os_demo(session: AsyncSession) -> None:
+    """Obra social con nomenclador versionado + afiliación demo (C-13, R0, idempotente)."""
+    from datetime import date
+    from app.models.obra_social import AfiliacionOS, ObraSocial
+
+    os_existente = (
+        await session.execute(
+            select(ObraSocial).where(ObraSocial.codigo == CODIGO_OS_DEMO)
+        )
+    ).scalar_one_or_none()
+
+    if os_existente is None:
+        os_demo = ObraSocial(
+            id=ID_OS_DEMO,
+            nombre="OSDE Demo",
+            codigo=CODIGO_OS_DEMO,
+            activa=True,
+            nomenclador_version=1,
+            nomenclador={
+                "limpieza": {"cubre": True, "copago": 0, "frecuencia": "2-anual"},
+                "consulta": {"cubre": True, "copago": 0, "frecuencia": "unlimited"},
+                "endodoncia": {"cubre": True, "copago": 5000, "frecuencia": "1-anual"},
+            },
+            topes={"monto_anual": 100000, "cantidad_limpieza_anual": 2},
+        )
+        session.add(os_demo)
+        await session.flush()
+    else:
+        os_demo = os_existente
+
+    ya_afiliacion = (
+        await session.execute(
+            select(AfiliacionOS).where(
+                AfiliacionOS.paciente_id == ID_PACIENTE_DEMO,
+                AfiliacionOS.obra_social_id == os_demo.id,
+            )
+        )
+    ).scalar_one_or_none()
+
+    if ya_afiliacion is None:
+        session.add(
+            AfiliacionOS(
+                id=ID_AFILIACION_DEMO,
+                paciente_id=ID_PACIENTE_DEMO,
+                obra_social_id=os_demo.id,
+                nro_afiliado="OSDE-987654321-01",
+                vigencia_desde=date(2026, 1, 1),
+                vigencia_hasta=date(2027, 12, 31),
+                vigente=True,
+            )
+        )
+        await session.flush()
+
+
+async def _seed_lista_espera_demo(session: AsyncSession) -> None:
+    """1 solicitud en lista de espera inteligente demo (C-14, R0, idempotente)."""
+    from datetime import datetime as _dt
+    from datetime import timedelta as _td
+    from zoneinfo import ZoneInfo
+    from app.models.lista_espera import ListaEspera
+
+    ba = ZoneInfo("America/Argentina/Buenos_Aires")
+    ya_espera = await session.get(ListaEspera, ID_LISTA_ESPERA_DEMO)
+    if ya_espera is None:
+        desde = _dt(2026, 12, 1, 8, 0, tzinfo=ba)
+        hasta = desde + _td(days=14)
+        session.add(
+            ListaEspera(
+                id=ID_LISTA_ESPERA_DEMO,
+                paciente_id=ID_PACIENTE_DEMO,
+                prestacion_id=ID_PRESTACION_LIMPIEZA_45,
+                profesional_id=ID_PROFESIONAL_A,
+                ventana_desde=desde,
+                ventana_hasta=hasta,
+                score=85.50,
+                score_componentes={"p_vent": 0.9, "p_hist": 0.8, "p_valor": 0.8},
+                estado="activa",
+            )
+        )
+        await session.flush()
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
+

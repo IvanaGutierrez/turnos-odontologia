@@ -55,8 +55,27 @@ La fuente de verdad del dominio vive en `knowledge-base/`. **Leé el archivo rel
 | **Backend Core** | FastAPI / SQLAlchemy / Postgres / TDD | `python-fastapi-development`, `sqlalchemy-postgres`, `supabase-postgres-best-practices`, `python-testing-patterns` |
 | **Frontend** | React / TS / Vite / E2E | `vercel-react-best-practices`, `frontend-design`, `web-design-guidelines`, `webapp-testing`, `playwright-cli` |
 | **Transversal** | Review multi-rol | `code-review` |
+| **Arquitectura / SDD** | Auditoría clínica y legal | `auditor-reglas-clinicas-sdd` |
 
 Cargá la skill correspondiente al contexto ANTES de escribir código.
+
+### Skill Propia: `auditor-reglas-clinicas-sdd`
+- **Ubicación**: `.agents/skills/auditor-reglas-clinicas-sdd/SKILL.md`
+- **Cuándo usarla**: Al formular o auditar propuestas de cambio (`proposal.md`, `design.md`, `specs/`), especialmente en cambios de agenda, bioseguridad, tiempos de desinfección o bloqueos de sillones (ej. C-15).
+- **Qué necesita**: Artefactos del change + `knowledge-base/05_reglas_de_negocio.md` + Leyes 26.529 y 25.326 (Regla R6).
+- **Cómo revisar el resultado**: Emite un dictamen formal Markdown clasificado en `[APROBADO]`, `[ADVERTENCIA]` o `[BLOQUEANTE]` con matriz de verificación por regla.
+
+---
+
+## Integraciones Externas (MCP — Model Context Protocol)
+
+Los servidores MCP **NO son skills**; son servicios externos desacoplados que exponen herramientas estandarizadas según el protocolo abierto MCP:
+
+### Servidor MCP PostgreSQL (`@modelcontextprotocol/server-postgres`)
+- **Propósito**: Introspección directa de la base de datos PostgreSQL local (tablas, columnas, índices GiST `btree_gist`, tipos de rango `tstzrange` y constraints de exclusión física).
+- **Capacidades expuestas**: `query`, `describe-table`, `list-tables`.
+- **Momento de uso**: Durante el diseño y análisis arquitectónico de changes con impacto en persistencia (ej. C-01, C-15), para verificar el estado de constraints sin tener que inferirlos.
+- **Límite operativo estricto (`readonly`)**: Debe conectarse OBLIGATORIAMENTE con credenciales de solo lectura (`turnos_readonly`). Respeta la Regla R2 (prohibido alterar la DB a mano; todo cambio estructural va por migración Alembic) y la Regla R0 (integridad de datos).
 
 > Los compact rules de cada skill los resuelve el orquestador desde `.atl/skill-registry.md` (generado por `skill-registry`; no versionado — no está en el repo). Esta tabla solo mapea skill→rol.
 

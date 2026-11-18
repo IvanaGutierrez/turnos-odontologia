@@ -51,7 +51,11 @@ async def patch_contacto(
     usuario: Annotated[Usuario, Depends(get_current_user)],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> dict[str, object]:
-    if not puede(usuario.rol, "pacientes"):
+    claims = getattr(request.state, "claims", {})
+    roles = claims.get("roles") or [usuario.rol]
+    if isinstance(roles, str):
+        roles = [roles]
+    if not any(puede(r, "pacientes") for r in roles):
         await repo_auditoria.registrar_auditoria(
             session,
             accion="acceso_denegado",

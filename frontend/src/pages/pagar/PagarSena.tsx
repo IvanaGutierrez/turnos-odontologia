@@ -26,9 +26,13 @@ function esRegistro(valor: unknown): valor is Record<string, unknown> {
 
 function esLinkPago(valor: unknown): valor is LinkPago {
   if (!esRegistro(valor)) return false;
+  const montoVal = valor["monto"];
+  const esMontoValido =
+    typeof montoVal === "number" ||
+    (typeof montoVal === "string" && !Number.isNaN(Number(montoVal)));
   return (
     typeof valor["init_point"] === "string" &&
-    typeof valor["monto"] === "number" &&
+    esMontoValido &&
     typeof valor["moneda"] === "string" &&
     typeof valor["estado_pago"] === "string"
   );
@@ -71,7 +75,12 @@ async function resolverLink(token: string, firma: string | null): Promise<LinkPa
     throw new Error("Ocurrió un error inesperado. Intentá nuevamente.");
   }
   if (!esLinkPago(cuerpo)) throw new Error("Ocurrió un error inesperado. Intentá nuevamente.");
-  return cuerpo;
+  return {
+    init_point: cuerpo.init_point,
+    monto: Number(cuerpo.monto),
+    moneda: cuerpo.moneda,
+    estado_pago: cuerpo.estado_pago,
+  };
 }
 
 function esNoEncontrado(error: unknown): boolean {

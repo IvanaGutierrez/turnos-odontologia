@@ -1,3 +1,5 @@
+
+
 # CHANGES — Secuencia de Implementación
 
 > Índice canónico de todos los changes del proyecto **turnos-odontologia** (sistema de turnos odontológicos para Argentina).
@@ -393,3 +395,23 @@ Paso │ Agente A (Backend Core) │ Agente B (Backend Aux)      │ Agente C (F
   1. **Propose vs. Apply**: validar y ajustar especificaciones antes de codificar (fase Propose) es sumamente económico; cada error de diseño que llegó a la fase Apply (modelo `OfertaEspera` desalineado de la migración 013, RBAC con excepción que mapeaba a `422` en vez de `403`, scoring sin componentes normalizados) costó ciclos completos de diagnóstico + re-ejecución de suite. La lección queda fijada: ningún cambio entra a Apply sin contrato de tests y esquema de datos revisados.
   2. **Especificación como Contrato**: el spec aprobado actuó como contrato estricto —los tests de integración fijaron estados, eventos (`lista_espera_creada|oferta_enviada|oferta_expirada|lista_espera_asignada|pago_reembolsado`), códigos HTTP y reglas de privacidad— e implementar consistió en trasladar esos requerimientos validados sin margen para adivinar (p. ej. fecha ISO y nombre completo en el blast, `canal=lista_espera` visible en grilla, TTL 30 min y top-3 exactos).
   3. **Arquitectura y Test Rig**: la base de reglas de negocio (`knowledge-base/05_reglas_de_negocio.md` y las políticas duras de agentes R0–R8) aportó el mayor valor técnico —cada bug real se resolvió invocando la regla correspondiente (R3 GiST como última defensa, R6 cero PII, R1/R2 capas y migraciones—. Y la estabilización del aislamiento global de tests fue determinante: el fixture de autoreseteo (`TRUNCATE ... CASCADE` de 27 tablas + reseed demo en `tests/conftest.py`) eliminó colisiones `usuario_email_key`/GiST/FK entre tests y corridas matadas, volviendo la suite determinista; el manejo de `deadlock detected` (40P01) como perdedor de carrera cerró la última fuente de flakiness en concurrencia real con threads.
+
+---
+
+### [C-15] `bloqueo-sillones-desinfeccion-mantenimiento`
+
+- **Estado**: `[ ]` preparado para implementar (especificación formal SDD completa)
+- **Scope**: Bloqueo físico de sillones por bioseguridad (desinfección de bioaerosoles 20–30 min post-cirugía) y mantenimiento técnico preventivo/correctivo
+  - Modelo `Bloqueo` con clave foránea a `sillon_id`, tipo de bloqueo (`desinfeccion|mantenimiento|licencia`) y CHECK constraint
+  - Constraint de exclusión física en PostgreSQL: `EXCLUDE USING gist (sillon_id WITH =, tstzrange(desde, hasta, '[)') WITH &&)` (Regla R3)
+  - Endpoints REST `POST /api/v1/bloqueos`, `GET /api/v1/bloqueos`, `DELETE /api/v1/bloqueos/{id}` protegidos por RBAC (`admin|recepcion`)
+  - Servicio de bloqueos: rechaza con `409 Conflict` si el sillón posee turnos activos en esa ventana horaria; auditoría sin PII (Regla R6)
+  - Integración en disponibilidad (`app/services/disponibilidad.py`): excluye slots en sillones bloqueados
+  - Tests planificados: Happy path (desinfección 30 min), Error de negocio (turnos concurrentes → 409), Caso de borde (límite de cierre y colisión GiST)
+- **Dependencias**: C-01, C-04
+- **Governance**: MEDIO
+- **Leer antes**:
+  - `knowledge-base/05_reglas_de_negocio.md` §RN-AG-01, §RN-AG-04
+  - `knowledge-base/04_modelo_de_datos.md` §Sillon / §Bloqueo
+  - `knowledge-base/03_actores_y_roles.md` §RBAC
+  - Ley 26.529 (Derechos del Paciente) y Ley 25.326 (Protección de Datos Personales / Regla R6)

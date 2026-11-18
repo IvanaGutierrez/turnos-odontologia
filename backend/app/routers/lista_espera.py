@@ -61,7 +61,9 @@ async def _escritura(
     sesion: Annotated[AsyncSession, Depends(get_session)],
 ) -> Usuario:
     """Guarda de escritura: `admin|recepcion` o `403` + `acceso_denegado`."""
-    if usuario.rol not in _ROLES_ESCRITURA:
+    claims = getattr(request.state, "claims", {})
+    roles = set(claims.get("roles") or [usuario.rol])
+    if not roles.intersection(_ROLES_ESCRITURA):
         await repo_auditoria.registrar_auditoria(
             sesion,
             accion="acceso_denegado",
@@ -85,7 +87,9 @@ async def _lectura(
     sesion: Annotated[AsyncSession, Depends(get_session)],
 ) -> Usuario:
     """Guarda de lectura: staff + odontólogo o `403` + `acceso_denegado`."""
-    if usuario.rol not in _ROLES_LECTURA:
+    claims = getattr(request.state, "claims", {})
+    roles = set(claims.get("roles") or [usuario.rol])
+    if not roles.intersection(_ROLES_LECTURA):
         await repo_auditoria.registrar_auditoria(
             sesion,
             accion="acceso_denegado",

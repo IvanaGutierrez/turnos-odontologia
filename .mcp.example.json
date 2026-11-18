@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "postgres-odontologia": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-postgres"
+      ],
+      "env": {
+        "DATABASE_URL": "postgresql://${DB_USER_RO}:${DB_PASSWORD_RO}@${DB_HOST:-127.0.0.1}:${DB_PORT:-5432}/${DB_NAME:-turnos}"
+      }
+    }
+  }
+}

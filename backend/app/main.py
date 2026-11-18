@@ -5,6 +5,7 @@ Errores HTTP con clave `detalle` (contrato de specs); sin PII (R6).
 """
 
 from fastapi import APIRouter, FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -116,6 +117,13 @@ def create_app() -> FastAPI:
         title="Turnos Odontología (AR)",
         version="0.2.0",
         description="Agenda odontológica con auth JWT + RBAC (C-02).",
+    )
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
     )
     app.add_exception_handler(SlotOcupadoError, slot_ocupado_handler)  # type: ignore[arg-type]
     app.add_exception_handler(EntidadNoEncontradaError, entidad_no_encontrada_handler)  # type: ignore[arg-type]

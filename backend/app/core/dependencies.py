@@ -41,9 +41,12 @@ async def get_current_user(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail=DETALLE_SIN_AUTH
         )
+    token = credenciales.credentials.strip()
+    if token.lower().startswith("bearer "):
+        token = token[7:].strip()
     try:
         claims = decodificar_y_validar(
-            credenciales.credentials,
+            token,
             secreto=settings.jwt_secret,
             tipo_esperado="access",
         )
@@ -64,6 +67,7 @@ async def get_current_user(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail=DETALLE_SIN_AUTH
         )
+    request.state.claims = claims
     return usuario
 
 
@@ -77,7 +81,11 @@ def require_role(
         usuario: Annotated[Usuario, Depends(get_current_user)],
         session: Annotated[AsyncSession, Depends(get_session)],
     ) -> Usuario:
-        if not puede(usuario.rol, recurso):
+        claims = getattr(request.state, "claims", {})
+        roles = claims.get("roles") or [usuario.rol]
+        if isinstance(roles, str):
+            roles = [roles]
+        if not any(puede(r, recurso) for r in roles):
             await repo_auditoria.registrar_auditoria(
                 session,
                 accion="acceso_denegado",

@@ -61,7 +61,11 @@ async def _caja_o_403(
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> Usuario:
     """Gate `caja`: roles de la matriz; resto → `403` + auditoría sin PII."""
-    if not puede(usuario.rol, "caja"):
+    claims = getattr(request.state, "claims", {})
+    roles = claims.get("roles") or [usuario.rol]
+    if isinstance(roles, str):
+        roles = [roles]
+    if not any(puede(r, "caja") for r in roles):
         await repo_auditoria.registrar_auditoria(
             session,
             accion="acceso_denegado",
@@ -174,7 +178,11 @@ async def post_reapertura(
     usuario: Annotated[Usuario, Depends(get_current_user)],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> dict[str, object]:
-    if not puede(usuario.rol, "reapertura_caja"):
+    claims = getattr(request.state, "claims", {})
+    roles = claims.get("roles") or [usuario.rol]
+    if isinstance(roles, str):
+        roles = [roles]
+    if not any(puede(r, "reapertura_caja") for r in roles):
         await repo_auditoria.registrar_auditoria(
             session,
             accion="reapertura_denegada",
